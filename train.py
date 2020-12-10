@@ -41,7 +41,7 @@ from utils.utils import StoreDict
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--env', type=str, default="CartPole-v1", help='environment ID')
+    parser.add_argument('--env', type=str, default="HalfCheetahBulletEnv-v0", help='environment ID')
     parser.add_argument('-tb', '--tensorboard-log', help='Tensorboard log dir', default='', type=str)
     parser.add_argument('-i', '--trained-agent', help='Path to a pretrained agent to continue training',
                         default='', type=str)
@@ -57,16 +57,17 @@ if __name__ == '__main__':
                         default=5, type=int)
     parser.add_argument('--save-freq', help='Save the model every n steps (if negative, no checkpoint)',
                         default=-1, type=int)
-    parser.add_argument('-f', '--log-folder', help='Log folder', type=str, default='logs')
+    parser.add_argument('-f', '--log-folder', help='Log folder', type=str, default='.')
     parser.add_argument('--seed', help='Random generator seed', type=int, default=0)
     parser.add_argument('--n-trials', help='Number of trials for optimizing hyperparameters', type=int, default=10)
+    parser.add_argument('-db', '--study-db', help='Study folder', type=str, default='.')
     parser.add_argument('-optimize', '--optimize-hyperparameters', action='store_true', default=False,
                         help='Run hyperparameters search')
     parser.add_argument('--n-jobs', help='Number of parallel jobs when optimizing hyperparameters', type=int, default=1)
     parser.add_argument('--sampler', help='Sampler to use when optimizing hyperparameters', type=str,
                         default='tpe', choices=['random', 'tpe', 'skopt'])
     parser.add_argument('--pruner', help='Pruner to use when optimizing hyperparameters', type=str,
-                        default='median', choices=['halving', 'median', 'none'])
+                        default='halving', choices=['halving', 'median', 'none'])
     parser.add_argument('--verbose', help='Verbose mode (0: no output, 1: INFO)', default=1,
                         type=int)
     parser.add_argument('--gym-packages', type=str, nargs='+', default=[],
@@ -383,7 +384,7 @@ if __name__ == '__main__':
                                              n_timesteps=n_timesteps, hyperparams=hyperparams,
                                              n_jobs=args.n_jobs, seed=args.seed,
                                              sampler_method=args.sampler, pruner_method=args.pruner,
-                                             verbose=args.verbose)
+                                             verbose=args.verbose, study_path=args.study_db)
 
         report_name = "report_{}_{}-trials-{}-{}-{}_{}.csv".format(env_id, args.n_trials, n_timesteps,
                                                                 args.sampler, args.pruner, int(time.time()))
