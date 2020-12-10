@@ -129,7 +129,7 @@ if __name__ == '__main__':
     print("Seed: {}".format(args.seed))
 
     # Load hyperparameters from yaml file
-    with open('hyperparams/{}.yml'.format(args.algo), 'r') as f:
+    with open(os.path.dirname(__file__)+'/hyperparams/{}.yml'.format(args.algo), 'r') as f:
         hyperparams_dict = yaml.safe_load(f)
         if env_id in list(hyperparams_dict.keys()):
             hyperparams = hyperparams_dict[env_id]
@@ -384,7 +384,7 @@ if __name__ == '__main__':
                                              n_timesteps=n_timesteps, hyperparams=hyperparams,
                                              n_jobs=args.n_jobs, seed=args.seed,
                                              sampler_method=args.sampler, pruner_method=args.pruner,
-                                             verbose=args.verbose, study_path=args.study_db)
+                                             verbose=args.verbose, study_db=args.study_db)
 
         report_name = "report_{}_{}-trials-{}-{}-{}_{}.csv".format(env_id, args.n_trials, n_timesteps,
                                                                 args.sampler, args.pruner, int(time.time()))
