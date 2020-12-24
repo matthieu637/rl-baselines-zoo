@@ -1,5 +1,6 @@
 import numpy as np
 import optuna
+import os
 from optuna.pruners import SuccessiveHalvingPruner, MedianPruner
 from optuna.samplers import RandomSampler, TPESampler
 from optuna.integration.skopt import SkoptSampler
@@ -78,7 +79,7 @@ def hyperparam_optimization(algo, model_fn, env_fn, n_trials=10, n_timesteps=500
         print("Sampler: {} - Pruner: {}".format(sampler_method, pruner_method))
 
     study = optuna.create_study(sampler=sampler, pruner=pruner, study_name="study",
-                    storage='sqlite:///'+study_db+'/study.db', load_if_exists=True)
+                    storage=os.getenv('SQLURI'), load_if_exists=True)
     algo_sampler = HYPERPARAMS_SAMPLER[algo]
 
     def objective(trial):
