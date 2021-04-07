@@ -59,8 +59,8 @@ if __name__ == '__main__':
                         default=-1, type=int)
     parser.add_argument('-f', '--log-folder', help='Log folder', type=str, default='.')
     parser.add_argument('--seed', help='Random generator seed', type=int, default=0)
-    parser.add_argument('--n-trials', help='Number of trials for optimizing hyperparameters', type=int, default=10)
-    parser.add_argument('-db', '--study-db', help='Study folder', type=str, default='.')
+    parser.add_argument('--n-trials', help='Number of trials for optimizing hyperparameters', type=int, default=1)#call several times instead
+    parser.add_argument('-db', '--study-name', help='Study name', type=str, default='study1')
     parser.add_argument('-optimize', '--optimize-hyperparameters', action='store_true', default=False,
                         help='Run hyperparameters search')
     parser.add_argument('--n-jobs', help='Number of parallel jobs when optimizing hyperparameters', type=int, default=1)
@@ -384,7 +384,7 @@ if __name__ == '__main__':
                                              n_timesteps=n_timesteps, hyperparams=hyperparams,
                                              n_jobs=args.n_jobs, seed=args.seed,
                                              sampler_method=args.sampler, pruner_method=args.pruner,
-                                             verbose=args.verbose, study_db=args.study_db)
+                                             verbose=args.verbose, study_name=args.study_name)
 
         report_name = "report_{}_{}-trials-{}-{}-{}_{}.csv".format(env_id, args.n_trials, n_timesteps,
                                                                 args.sampler, args.pruner, int(time.time()))
