@@ -24,7 +24,7 @@ from .callbacks import TrialEvalCallback
 
 
 def hyperparam_optimization(algo, model_fn, env_fn, n_trials=10, n_timesteps=5000, hyperparams=None,
-                            n_jobs=1, sampler_method='random', pruner_method='halving', study_db=".",
+                            n_jobs=1, sampler_method='random', pruner_method='halving', study_name="study1",
                             seed=0, verbose=1):
     """
     :param algo: (str)
@@ -78,7 +78,7 @@ def hyperparam_optimization(algo, model_fn, env_fn, n_trials=10, n_timesteps=500
     if verbose > 0:
         print("Sampler: {} - Pruner: {}".format(sampler_method, pruner_method))
 
-    study = optuna.create_study(sampler=sampler, pruner=pruner, study_name="study",
+    study = optuna.create_study(sampler=sampler, pruner=pruner, study_name=study_name,
                     storage=os.getenv('SQLURI'), load_if_exists=True)
     algo_sampler = HYPERPARAMS_SAMPLER[algo]
 
