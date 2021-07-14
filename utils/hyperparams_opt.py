@@ -56,7 +56,7 @@ def hyperparam_optimization(algo, model_fn, env_fn, n_trials=10, n_timesteps=500
     if sampler_method == 'random':
         sampler = RandomSampler(seed=seed)
     elif sampler_method == 'tpe':
-        sampler = TPESampler(n_startup_trials=n_startup_trials, seed=seed)
+        sampler = TPESampler(n_startup_trials=n_startup_trials, seed=seed, multivariate=True)
     elif sampler_method == 'skopt':
         # cf https://scikit-optimize.github.io/#skopt.Optimizer
         # GP: gaussian process
@@ -68,7 +68,7 @@ def hyperparam_optimization(algo, model_fn, env_fn, n_trials=10, n_timesteps=500
     if pruner_method == 'halving':
         pruner = SuccessiveHalvingPruner(min_resource=1, reduction_factor=4, min_early_stopping_rate=0)
     elif pruner_method == 'median':
-        pruner = MedianPruner(n_startup_trials=n_startup_trials, n_warmup_steps=n_evaluations // 3)
+        pruner = MedianPruner(n_startup_trials=n_startup_trials, n_warmup_steps=n_evaluations // 2)
     elif pruner_method == 'none':
         # Do not prune
         pruner = MedianPruner(n_startup_trials=n_trials, n_warmup_steps=n_evaluations)
@@ -135,14 +135,14 @@ def hyperparam_optimization(algo, model_fn, env_fn, n_trials=10, n_timesteps=500
 
     print('Number of finished trials: ', len(study.trials))
 
-    print('Best trial:')
-    trial = study.best_trial
-
-    print('Value: ', trial.value)
-
-    print('Params: ')
-    for key, value in trial.params.items():
-        print('    {}: {}'.format(key, value))
+#    print('Best trial:')
+#    trial = study.best_trial
+#
+#    print('Value: ', trial.value)
+#
+#    print('Params: ')
+#    for key, value in trial.params.items():
+#        print('    {}: {}'.format(key, value))
 
     return study.trials_dataframe()
 
@@ -398,6 +398,42 @@ def sample_her_params(trial):
     return hyperparams
 
 
+def sample_penfac_params(trial):
+    """
+    Sampler for Penfac hyperparams.
+
+    :param trial: (optuna.trial)
+    :return: (dict)
+    """
+#    gamma = trial.suggest_categorical('gamma', [0.9, 0.95, 0.98, 0.99, 0.995, 0.999, 0.9999])
+    noise = trial.suggest_uniform('noise',  0.01, 2)
+    momentum = trial.suggest_categorical('momentum', [0, 1])
+#    actor_output_layer_type = trial.suggest_categorical('actor_output_layer_type', [2])
+    hidden_layer_type = trial.suggest_categorical('hidden_layer_type', [1, 2, 3])
+    alpha_a = trial.suggest_loguniform('alpha_a', 1e-5, 0.01)
+    alpha_v = trial.suggest_loguniform('alpha_v', 1e-5, 0.01)
+    number_fitted_iteration = trial.suggest_categorical('number_fitted_iteration', [1, 5, 10, 25, 50])
+    lambda_ = trial.suggest_categorical('lambda', [0.8, 0.9, 0.92, 0.95, 0.98, 0.99, 1.0])
+    update_each_episode = trial.suggest_categorical('update_each_episode', [2, 3, 4, 5, 8])
+    stoch_iter_actor = trial.suggest_categorical('stoch_iter_actor', [1, 10, 25, 50])
+    beta_target = trial.suggest_uniform('beta_target', 0.001, 0.4)
+
+    return {
+        'gamma': 0.99,
+        'noise': noise,
+        'momentum': momentum,
+        'actor_output_layer_type': 2,
+        'hidden_layer_type': hidden_layer_type,
+        'alpha_a': alpha_a,
+        'alpha_v': alpha_v,
+        'number_fitted_iteration': number_fitted_iteration,
+        'lambda_': lambda_,
+        'update_each_episode': update_each_episode,
+        'stoch_iter_actor': stoch_iter_actor,
+        'beta_target': beta_target,
+    }
+
+
 HYPERPARAMS_SAMPLER = {
     'ppo2': sample_ppo2_params,
     'sac': sample_sac_params,
@@ -406,5 +442,6 @@ HYPERPARAMS_SAMPLER = {
     'ddpg': sample_ddpg_params,
     'her': sample_her_params,
     'acktr': sample_acktr_params,
-    'td3': sample_td3_params
+    'td3': sample_td3_params,
+    'penfac': sample_penfac_params,
 }

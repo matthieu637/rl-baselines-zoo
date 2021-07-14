@@ -28,6 +28,7 @@ from stable_baselines.common.vec_env import DummyVecEnv, VecNormalize, \
     VecFrameStack, SubprocVecEnv
 from stable_baselines.common.cmd_util import make_atari_env
 from stable_baselines.common import set_global_seeds
+from utils.penfac import Penfac
 
 ALGOS = {
     'a2c': A2C,
@@ -39,7 +40,8 @@ ALGOS = {
     'sac': SAC,
     'ppo2': PPO2,
     'trpo': TRPO,
-    'td3': TD3
+    'td3': TD3,
+    'penfac': Penfac,
 }
 
 
