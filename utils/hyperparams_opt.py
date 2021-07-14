@@ -1,12 +1,16 @@
 import numpy as np
 import optuna
 import os
+import multiprocessing
 from optuna.pruners import SuccessiveHalvingPruner, MedianPruner
 from optuna.samplers import RandomSampler, TPESampler
 from optuna.integration.skopt import SkoptSampler
 from stable_baselines import SAC, TD3
 from stable_baselines.common.noise import AdaptiveParamNoiseSpec, NormalActionNoise, OrnsteinUhlenbeckActionNoise
 from stable_baselines.common.vec_env import VecNormalize, VecEnv
+from stable_baselines.common.vec_env.base_vec_env import CloudpickleWrapper
+from stable_baselines.common.evaluation import evaluate_policy
+from stable_baselines.common.vec_env import sync_envs_normalization
 
 # Load mpi4py-dependent algorithms only if mpi is installed. (c.f. stable-baselines v2.10.0)
 try:
@@ -20,7 +24,49 @@ else:
     DDPG = None
 del mpi4py
 
-from .callbacks import TrialEvalCallback
+
+def sublearn(kwargs, model_fn, eval_freq, n_eval_episodes, env_fn, remote, parent_remote, n_evaluations, index, seed):
+    kwargs['seed'] = seed + index
+    model = model_fn.var(**kwargs)
+    parent_remote.close()
+
+    eval_env = env_fn.var(n_envs=1, eval_env=True)
+
+#    while True:
+#        try:
+    for _ in range(n_evaluations):
+       try:
+           model.learn(eval_freq)
+
+           sync_envs_normalization(model.env, eval_env)
+           episode_rewards, episode_lengths = evaluate_policy(model, eval_env,
+                                                  n_eval_episodes=n_eval_episodes,
+                                                  render=False,
+                                                  deterministic=True,
+                                                  return_episode_rewards=True)
+
+           remote.send(('perf', -1 * np.mean(episode_rewards)))
+           cmd, data = remote.recv() #sync with others
+           if cmd == 'pruned':
+               break
+       except AssertionError:
+           # Sometimes, random hyperparams can generate NaN
+           # Free memory
+           model.env.close()
+           remote.send(('pruned', float('+inf')))
+           raise optuna.exceptions.TrialPruned()
+#        except EOFError:
+#            break
+
+    cmd, data = remote.recv() #sync with others
+    print(cmd)
+    remote.close()
+    model.env.close()
+    eval_env.close()
+
+    del model.env
+    del model
+    del eval_env
 
 
 def hyperparam_optimization(algo, model_fn, env_fn, n_trials=10, n_timesteps=5000, hyperparams=None,
@@ -95,33 +141,46 @@ def hyperparam_optimization(algo, model_fn, env_fn, n_trials=10, n_timesteps=500
             trial.n_actions = env_fn(n_envs=1).action_space.shape[0]
         kwargs.update(algo_sampler(trial))
 
-        model = model_fn(**kwargs)
+        number_average_seeds = 2
 
-        eval_env = env_fn(n_envs=1, eval_env=True)
-        # Account for parallel envs
-        eval_freq_ = eval_freq
-        if isinstance(model.get_env(), VecEnv):
-            eval_freq_ = max(eval_freq // model.get_env().num_envs, 1)
-        # TODO: use non-deterministic eval for Atari?
-        eval_callback = TrialEvalCallback(eval_env, trial, n_eval_episodes=n_eval_episodes,
-                                          eval_freq=eval_freq_, deterministic=True)
+        ctx = multiprocessing.get_context('forkserver') #forkserver, spawn
+        remotes, work_remotes = zip(*[ctx.Pipe(duplex=True) for _ in range(number_average_seeds)])
 
-        try:
-            model.learn(n_timesteps, callback=eval_callback)
-            # Free memory
-            model.env.close()
-            eval_env.close()
-        except AssertionError:
-            # Sometimes, random hyperparams can generate NaN
-            # Free memory
-            model.env.close()
-            eval_env.close()
-            raise optuna.exceptions.TrialPruned()
-        is_pruned = eval_callback.is_pruned
-        cost = -1 * eval_callback.last_mean_reward
+        processes = []
+        for index in range(number_average_seeds):
+            p = ctx.Process(target=sublearn, args=(kwargs, CloudpickleWrapper(model_fn), eval_freq, n_eval_episodes, CloudpickleWrapper(env_fn), work_remotes[index], remotes[index], n_evaluations, index, seed), daemon=True)
+            processes.append(p)
+            p.start()
+            work_remotes[index].close()
 
-        del model.env, eval_env
-        del model
+        for eval_idx in range(n_evaluations):
+            results = [remote.recv() for remote in remotes]
+
+            if 'pruned' in [r[0] for r in results]:
+                is_pruned = True
+
+            print([r[1] for r in results])
+            cost = np.mean([r[1] for r in results])
+            trial.report(cost, eval_idx+1)
+            is_pruned = trial.should_prune()
+            if is_pruned:
+                for remote in remotes:
+                    remote.send(('pruned', None))
+                break
+
+            for remote in remotes:
+                remote.send(('ok', None))
+
+        for remote in remotes:
+            remote.send(('close', None))
+
+        for index in range(number_average_seeds):
+            processes[index].join()
+
+        for remote in remotes:
+            remote.close()
+
+        del processes
 
         if is_pruned:
             raise optuna.exceptions.TrialPruned()

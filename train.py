@@ -396,6 +396,15 @@ if __name__ == '__main__':
 
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
         data_frame.to_csv(log_path)
+
+        #shitty clean up
+        import os
+        import signal
+        import psutil
+        for children in [p.pid for p in psutil.Process(os.getpid()).children(recursive=True)]:
+            os.kill(children, signal.SIGKILL)
+            print("kill %s" % children)
+
         exit()
     else:
         # Train an agent from scratch
