@@ -5,62 +5,72 @@ import multiprocessing
 from optuna.pruners import SuccessiveHalvingPruner, MedianPruner
 from optuna.samplers import RandomSampler, TPESampler
 from optuna.integration.skopt import SkoptSampler
-from stable_baselines import SAC, TD3
-from stable_baselines.common.noise import AdaptiveParamNoiseSpec, NormalActionNoise, OrnsteinUhlenbeckActionNoise
-from stable_baselines.common.vec_env import VecNormalize, VecEnv
-from stable_baselines.common.vec_env.base_vec_env import CloudpickleWrapper
-from stable_baselines.common.evaluation import evaluate_policy
-from stable_baselines.common.vec_env import sync_envs_normalization
+from utils.utils2 import CloudpickleWrapper
 
 # Load mpi4py-dependent algorithms only if mpi is installed. (c.f. stable-baselines v2.10.0)
-try:
-    import mpi4py
-except ImportError:
-    mpi4py = None
-
-if mpi4py is not None:
-    from stable_baselines import DDPG
-else:
-    DDPG = None
-del mpi4py
+#try:
+#    import mpi4py
+#except ImportError:
+#    mpi4py = None
+#
+#if mpi4py is not None:
+#    from stable_baselines import DDPG
+#else:
+#    DDPG = None
+#del mpi4py
 
 
 def sublearn(kwargs, model_fn, eval_freq, n_eval_episodes, env_fn, remote, parent_remote, n_evaluations, index, seed):
+    from stable_baselines.common.noise import AdaptiveParamNoiseSpec, NormalActionNoise, OrnsteinUhlenbeckActionNoise
+    from stable_baselines.common.vec_env import VecNormalize, VecEnv
+    from stable_baselines.common.evaluation import evaluate_policy
+    from stable_baselines.common.vec_env import sync_envs_normalization
+    from stable_baselines.common.schedules import constfn
+    from stable_baselines.common import set_global_seeds
+    from stable_baselines.common.cmd_util import make_atari_env
+    from stable_baselines.common.vec_env import VecFrameStack, SubprocVecEnv, VecNormalize, DummyVecEnv, VecEnv
+    from stable_baselines.common.noise import AdaptiveParamNoiseSpec, NormalActionNoise, OrnsteinUhlenbeckActionNoise
+    from stable_baselines.common.schedules import constfn
+    from stable_baselines.common.callbacks import CheckpointCallback, EvalCallback
+    from stable_baselines.her import HERGoalEnvWrapper
+    from stable_baselines.common.base_class import _UnvecWrapper
+
+
     kwargs['seed'] = seed + index
     model = model_fn.var(**kwargs)
     parent_remote.close()
 
     eval_env = env_fn.var(n_envs=1, eval_env=True)
 
-#    while True:
-#        try:
-    for _ in range(n_evaluations):
-       try:
-           model.learn(eval_freq)
+    try:
+        for _ in range(n_evaluations):
+            try:
+                model.learn(eval_freq)
 
-           sync_envs_normalization(model.env, eval_env)
-           episode_rewards, episode_lengths = evaluate_policy(model, eval_env,
-                                                  n_eval_episodes=n_eval_episodes,
-                                                  render=False,
-                                                  deterministic=True,
-                                                  return_episode_rewards=True)
+                sync_envs_normalization(model.env, eval_env)
+                episode_rewards, episode_lengths = evaluate_policy(model, eval_env,
+                                                       n_eval_episodes=n_eval_episodes,
+                                                       render=False,
+                                                       deterministic=True,
+                                                       return_episode_rewards=True)
 
-           remote.send(('perf', -1 * np.mean(episode_rewards)))
-           cmd, data = remote.recv() #sync with others
-           if cmd == 'pruned':
-               break
-       except AssertionError:
-           # Sometimes, random hyperparams can generate NaN
-           # Free memory
-           model.env.close()
-           remote.send(('pruned', float('+inf')))
-           raise optuna.exceptions.TrialPruned()
-#        except EOFError:
-#            break
+                remote.send(('perf', -1 * np.mean(episode_rewards)))
+                cmd, data = remote.recv() #sync with others
+                if cmd == 'pruned':
+                    break
+            except AssertionError:
+                # Sometimes, random hyperparams can generate NaN
+                # Free memory
+                model.env.close()
+                remote.send(('pruned', float('+inf')))
+                raise optuna.exceptions.TrialPruned()
 
-    cmd, data = remote.recv() #sync with others
-    print(cmd)
-    remote.close()
+        remote.close()
+    except EOFError:
+        pass
+    except BrokenPipeError:
+        pass
+
     model.env.close()
     eval_env.close()
 
@@ -141,9 +151,9 @@ def hyperparam_optimization(algo, model_fn, env_fn, n_trials=10, n_timesteps=500
             trial.n_actions = env_fn(n_envs=1).action_space.shape[0]
         kwargs.update(algo_sampler(trial))
 
-        number_average_seeds = 2
+        number_average_seeds = 3
 
-        ctx = multiprocessing.get_context('forkserver') #forkserver, spawn
+        ctx = multiprocessing.get_context('forkserver') #forkserver, spawn, fork
         remotes, work_remotes = zip(*[ctx.Pipe(duplex=True) for _ in range(number_average_seeds)])
 
         processes = []
@@ -165,20 +175,26 @@ def hyperparam_optimization(algo, model_fn, env_fn, n_trials=10, n_timesteps=500
             is_pruned = trial.should_prune()
             if is_pruned:
                 for remote in remotes:
-                    remote.send(('pruned', None))
+                    try:
+                        remote.send(('pruned', None))
+                    except (BrokenPipeError, EOFError):
+                        pass
                 break
 
             for remote in remotes:
-                remote.send(('ok', None))
-
-        for remote in remotes:
-            remote.send(('close', None))
+                try:
+                    remote.send(('ok', None))
+                except (BrokenPipeError, EOFError):
+                    pass
 
         for index in range(number_average_seeds):
             processes[index].join()
 
         for remote in remotes:
-            remote.close()
+            try:
+                remote.close()
+            except (BrokenPipeError, EOFError):
+                pass
 
         del processes
 

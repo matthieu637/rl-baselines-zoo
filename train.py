@@ -17,27 +17,27 @@ import numpy as np
 import yaml
 # Optional dependencies
 import utils.import_envs  # pytype: disable=import-error
-try:
-    import mpi4py
-    from mpi4py import MPI
-except ImportError:
-    mpi4py = None
+#try:
+#    import mpi4py
+#    from mpi4py import MPI
+#except ImportError:
+#    mpi4py = None
+mpi4py = None
 
-from stable_baselines.common import set_global_seeds
-from stable_baselines.common.cmd_util import make_atari_env
-from stable_baselines.common.vec_env import VecFrameStack, SubprocVecEnv, VecNormalize, DummyVecEnv, VecEnv
-from stable_baselines.common.noise import AdaptiveParamNoiseSpec, NormalActionNoise, OrnsteinUhlenbeckActionNoise
-from stable_baselines.common.schedules import constfn
-from stable_baselines.common.callbacks import CheckpointCallback, EvalCallback
-from stable_baselines.her import HERGoalEnvWrapper
-from stable_baselines.common.base_class import _UnvecWrapper
+#from stable_baselines.common import set_global_seeds
+#from stable_baselines.common.cmd_util import make_atari_env
+#from stable_baselines.common.noise import AdaptiveParamNoiseSpec, NormalActionNoise, OrnsteinUhlenbeckActionNoise
+#from stable_baselines.common.schedules import constfn
+#from stable_baselines.common.callbacks import CheckpointCallback, EvalCallback
+#from stable_baselines.her import HERGoalEnvWrapper
+#from stable_baselines.common.base_class import _UnvecWrapper
 
-from utils import make_env, ALGOS, linear_schedule, get_latest_run_id, get_wrapper_class
+#from utils import make_env, ALGOS, linear_schedule, get_latest_run_id, get_wrapper_class
+from utils.utils2 import get_wrapper_class, ALGOS, get_latest_run_id, StoreDict
 from utils.hyperparams_opt import hyperparam_optimization
-from utils.callbacks import SaveVecNormalizeCallback
-from utils.noise import LinearNormalActionNoise
-from utils.utils import StoreDict
-
+#from utils.callbacks import SaveVecNormalizeCallback
+#from utils.noise import LinearNormalActionNoise
+#from utils.utils import StoreDict
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -101,7 +101,7 @@ if __name__ == '__main__':
         # Seed but with a random one
         args.seed = np.random.randint(2**32 - 1)
 
-    set_global_seeds(args.seed)
+#    set_global_seeds(args.seed)
 
     if args.trained_agent != "":
         valid_extension = args.trained_agent.endswith('.pkl') or args.trained_agent.endswith('.zip')
@@ -129,56 +129,56 @@ if __name__ == '__main__':
     print("Seed: {}".format(args.seed))
 
     # Load hyperparameters from yaml file
-    with open(os.path.dirname(__file__)+'/hyperparams/{}.yml'.format(args.algo), 'r') as f:
-        hyperparams_dict = yaml.safe_load(f)
-        if env_id in list(hyperparams_dict.keys()):
-            hyperparams = hyperparams_dict[env_id]
-        elif is_atari:
-            hyperparams = hyperparams_dict['atari']
-        else:
-            raise ValueError("Hyperparameters not found for {}-{}".format(args.algo, env_id))
-
-    if args.hyperparams is not None:
-        # Overwrite hyperparams if needed
-        hyperparams.update(args.hyperparams)
-
-    # Sort hyperparams that will be saved
-    saved_hyperparams = OrderedDict([(key, hyperparams[key]) for key in sorted(hyperparams.keys())])
-
+#    with open(os.path.dirname(__file__)+'/hyperparams/{}.yml'.format(args.algo), 'r') as f:
+#        hyperparams_dict = yaml.safe_load(f)
+#        if env_id in list(hyperparams_dict.keys()):
+#            hyperparams = hyperparams_dict[env_id]
+#        elif is_atari:
+#            hyperparams = hyperparams_dict['atari']
+#        else:
+#            raise ValueError("Hyperparameters not found for {}-{}".format(args.algo, env_id))
+#
+#    if args.hyperparams is not None:
+#        # Overwrite hyperparams if needed
+#        hyperparams.update(args.hyperparams)
+#
+#    # Sort hyperparams that will be saved
+#    saved_hyperparams = OrderedDict([(key, hyperparams[key]) for key in sorted(hyperparams.keys())])
+#
     algo_ = args.algo
-    # HER is only a wrapper around an algo
-    if args.algo == 'her':
-        algo_ = saved_hyperparams['model_class']
-        assert algo_ in {'sac', 'ddpg', 'dqn', 'td3'}, "{} is not compatible with HER".format(algo_)
-        # Retrieve the model class
-        hyperparams['model_class'] = ALGOS[saved_hyperparams['model_class']]
-        if hyperparams['model_class'] is None:
-            raise ValueError('{} requires MPI to be installed'.format(algo_))
-
-    if args.verbose > 0:
-        pprint(saved_hyperparams)
-
-    n_envs = hyperparams.get('n_envs', 1)
-
-    if args.verbose > 0:
-        print("Using {} environments".format(n_envs))
-
-    # Create learning rate schedules for ppo2 and sac
-    if algo_ in ["ppo2", "sac", "td3"]:
-        for key in ['learning_rate', 'cliprange', 'cliprange_vf']:
-            if key not in hyperparams:
-                continue
-            if isinstance(hyperparams[key], str):
-                schedule, initial_value = hyperparams[key].split('_')
-                initial_value = float(initial_value)
-                hyperparams[key] = linear_schedule(initial_value)
-            elif isinstance(hyperparams[key], (float, int)):
-                # Negative value: ignore (ex: for clipping)
-                if hyperparams[key] < 0:
-                    continue
-                hyperparams[key] = constfn(float(hyperparams[key]))
-            else:
-                raise ValueError('Invalid value for {}: {}'.format(key, hyperparams[key]))
+#    # HER is only a wrapper around an algo
+#    if args.algo == 'her':
+#        algo_ = saved_hyperparams['model_class']
+#        assert algo_ in {'sac', 'ddpg', 'dqn', 'td3'}, "{} is not compatible with HER".format(algo_)
+#        # Retrieve the model class
+#        hyperparams['model_class'] = ALGOS[saved_hyperparams['model_class']]
+#        if hyperparams['model_class'] is None:
+#            raise ValueError('{} requires MPI to be installed'.format(algo_))
+#
+#    if args.verbose > 0:
+#        pprint(saved_hyperparams)
+#
+#    n_envs = hyperparams.get('n_envs', 1)
+#
+#    if args.verbose > 0:
+#        print("Using {} environments".format(n_envs))
+#
+#    # Create learning rate schedules for ppo2 and sac
+#    if algo_ in ["ppo2", "sac", "td3"]:
+#        for key in ['learning_rate', 'cliprange', 'cliprange_vf']:
+#            if key not in hyperparams:
+#                continue
+#            if isinstance(hyperparams[key], str):
+#                schedule, initial_value = hyperparams[key].split('_')
+#                initial_value = float(initial_value)
+#                hyperparams[key] = linear_schedule(initial_value)
+#            elif isinstance(hyperparams[key], (float, int)):
+#                # Negative value: ignore (ex: for clipping)
+#                if hyperparams[key] < 0:
+#                    continue
+#                hyperparams[key] = constfn(float(hyperparams[key]))
+#            else:
+#                raise ValueError('Invalid value for {}: {}'.format(key, hyperparams[key]))
 
     # Should we overwrite the number of timesteps?
     if args.n_timesteps > 0:
@@ -188,45 +188,49 @@ if __name__ == '__main__':
     else:
         n_timesteps = int(hyperparams['n_timesteps'])
 
-    normalize = False
+    normalize = True
     normalize_kwargs = {}
-    if 'normalize' in hyperparams.keys():
-        normalize = hyperparams['normalize']
-        if isinstance(normalize, str):
-            normalize_kwargs = eval(normalize)
-            normalize = True
-        del hyperparams['normalize']
+#    if 'normalize' in hyperparams.keys():
+#        normalize = hyperparams['normalize']
+#        if isinstance(normalize, str):
+#            normalize_kwargs = eval(normalize)
+#            normalize = True
+#        del hyperparams['normalize']
+#
+#    # Convert to python object if needed
+#    if 'policy_kwargs' in hyperparams.keys() and isinstance(hyperparams['policy_kwargs'], str):
+#        hyperparams['policy_kwargs'] = eval(hyperparams['policy_kwargs'])
+#
+#    # Delete keys so the dict can be pass to the model constructor
+#    if 'n_envs' in hyperparams.keys():
+#        del hyperparams['n_envs']
+#    del hyperparams['n_timesteps']
+#
+#    # obtain a class object from a wrapper name string in hyperparams
+#    # and delete the entry
+#    env_wrapper = get_wrapper_class(hyperparams)
+#    if 'env_wrapper' in hyperparams.keys():
+#        del hyperparams['env_wrapper']
 
-    # Convert to python object if needed
-    if 'policy_kwargs' in hyperparams.keys() and isinstance(hyperparams['policy_kwargs'], str):
-        hyperparams['policy_kwargs'] = eval(hyperparams['policy_kwargs'])
-
-    # Delete keys so the dict can be pass to the model constructor
-    if 'n_envs' in hyperparams.keys():
-        del hyperparams['n_envs']
-    del hyperparams['n_timesteps']
-
-    # obtain a class object from a wrapper name string in hyperparams
-    # and delete the entry
-    env_wrapper = get_wrapper_class(hyperparams)
-    if 'env_wrapper' in hyperparams.keys():
-        del hyperparams['env_wrapper']
+    env_wrapper = None
 
     log_path = "{}/{}/".format(args.log_folder, args.algo)
     save_path = os.path.join(log_path, "{}_{}{}".format(env_id, get_latest_run_id(log_path, env_id) + 1, uuid_str))
     params_path = "{}/{}".format(save_path, env_id)
     os.makedirs(params_path, exist_ok=True)
 
-    callbacks = []
-    if args.save_freq > 0:
-        # Account for the number of parallel environments
-        args.save_freq = max(args.save_freq // n_envs, 1)
-        callbacks.append(CheckpointCallback(save_freq=args.save_freq,
-                                            save_path=save_path, name_prefix='rl_model', verbose=1))
+#    callbacks = []
+#    if args.save_freq > 0:
+#        # Account for the number of parallel environments
+#        args.save_freq = max(args.save_freq // n_envs, 1)
+#        callbacks.append(CheckpointCallback(save_freq=args.save_freq,
+#                                            save_path=save_path, name_prefix='rl_model', verbose=1))
 
     env_kwargs = {} if args.env_kwargs is None else args.env_kwargs
 
     def create_env(n_envs, eval_env=False, no_log=False):
+        from stable_baselines.common.vec_env import VecFrameStack, SubprocVecEnv, VecNormalize, DummyVecEnv, VecEnv
+        from utils.utils import make_env, ALGOS, linear_schedule
         """
         Create the environment and wrap it if necessary
         :param n_envs: (int)
@@ -280,10 +284,10 @@ if __name__ == '__main__':
                 env = VecNormalize(env, **local_normalize_kwargs)
 
         # Optional Frame-stacking
-        if hyperparams.get('frame_stack', False):
-            n_stack = hyperparams['frame_stack']
-            env = VecFrameStack(env, n_stack)
-            print("Stacking {} frames".format(n_stack))
+#        if hyperparams.get('frame_stack', False):
+#            n_stack = hyperparams['frame_stack']
+#            env = VecFrameStack(env, n_stack)
+#            print("Stacking {} frames".format(n_stack))
         if args.algo == 'her':
             # Wrap the env if need to flatten the dict obs
             if isinstance(env, VecEnv):
@@ -292,62 +296,63 @@ if __name__ == '__main__':
         return env
 
 
-    env = create_env(n_envs)
-    # Create test env if needed, do not normalize reward
-    eval_env = None
-    if args.eval_freq > 0 and not args.optimize_hyperparameters:
-        # Account for the number of parallel environments
-        args.eval_freq = max(args.eval_freq // n_envs, 1)
-
-        if args.verbose > 0:
-            print("Creating test environment")
-
-        save_vec_normalize = SaveVecNormalizeCallback(save_freq=1, save_path=params_path)
-        eval_callback = EvalCallback(create_env(1, eval_env=True), callback_on_new_best=save_vec_normalize,
-                                     best_model_save_path=save_path, n_eval_episodes=args.eval_episodes,
-                                     log_path=save_path, eval_freq=args.eval_freq)
-        callbacks.append(eval_callback)
-
+#    if args.eval_freq > 0 and not args.optimize_hyperparameters:
+#        env = create_env(n_envs)
+#        # Create test env if needed, do not normalize reward
+#        eval_env = None
+#
+#        # Account for the number of parallel environments
+#        args.eval_freq = max(args.eval_freq // n_envs, 1)
+#
+#        if args.verbose > 0:
+#            print("Creating test environment")
+#
+#        save_vec_normalize = SaveVecNormalizeCallback(save_freq=1, save_path=params_path)
+#        eval_callback = EvalCallback(create_env(1, eval_env=True), callback_on_new_best=save_vec_normalize,
+#                                     best_model_save_path=save_path, n_eval_episodes=args.eval_episodes,
+#                                     log_path=save_path, eval_freq=args.eval_freq)
+#        callbacks.append(eval_callback)
+#
     # TODO: check for hyperparameters optimization
     # TODO: check What happens with the eval env when using frame stack
-    if 'frame_stack' in hyperparams:
-        del hyperparams['frame_stack']
+#    if 'frame_stack' in hyperparams:
+#        del hyperparams['frame_stack']
 
     # Stop env processes to free memory
-    if args.optimize_hyperparameters and n_envs > 1:
-        env.close()
+#    if args.optimize_hyperparameters and n_envs > 1:
+#        env.close()
 
-    # Parse noise string for DDPG and SAC
-    if algo_ in ['ddpg', 'sac', 'td3'] and hyperparams.get('noise_type') is not None:
-        noise_type = hyperparams['noise_type'].strip()
-        noise_std = hyperparams['noise_std']
-        n_actions = env.action_space.shape[0]
-        if 'adaptive-param' in noise_type:
-            assert algo_ == 'ddpg', 'Parameter is not supported by SAC'
-            hyperparams['param_noise'] = AdaptiveParamNoiseSpec(initial_stddev=noise_std,
-                                                                desired_action_stddev=noise_std)
-        elif 'normal' in noise_type:
-            if 'lin' in noise_type:
-                hyperparams['action_noise'] = LinearNormalActionNoise(mean=np.zeros(n_actions),
-                                                                      sigma=noise_std * np.ones(n_actions),
-                                                                      final_sigma=hyperparams.get('noise_std_final', 0.0) * np.ones(n_actions),
-                                                                      max_steps=n_timesteps)
-            else:
-                hyperparams['action_noise'] = NormalActionNoise(mean=np.zeros(n_actions),
-                                                                sigma=noise_std * np.ones(n_actions))
-        elif 'ornstein-uhlenbeck' in noise_type:
-            hyperparams['action_noise'] = OrnsteinUhlenbeckActionNoise(mean=np.zeros(n_actions),
-                                                                       sigma=noise_std * np.ones(n_actions))
-        else:
-            raise RuntimeError('Unknown noise type "{}"'.format(noise_type))
-        print("Applying {} noise with std {}".format(noise_type, noise_std))
-        del hyperparams['noise_type']
-        del hyperparams['noise_std']
-        if 'noise_std_final' in hyperparams:
-            del hyperparams['noise_std_final']
-
-    if ALGOS[args.algo] is None:
-        raise ValueError('{} requires MPI to be installed'.format(args.algo))
+#    # Parse noise string for DDPG and SAC
+#    if algo_ in ['ddpg', 'sac', 'td3'] and hyperparams.get('noise_type') is not None:
+#        noise_type = hyperparams['noise_type'].strip()
+#        noise_std = hyperparams['noise_std']
+#        n_actions = env.action_space.shape[0]
+#        if 'adaptive-param' in noise_type:
+#            assert algo_ == 'ddpg', 'Parameter is not supported by SAC'
+#            hyperparams['param_noise'] = AdaptiveParamNoiseSpec(initial_stddev=noise_std,
+#                                                                desired_action_stddev=noise_std)
+#        elif 'normal' in noise_type:
+#            if 'lin' in noise_type:
+#                hyperparams['action_noise'] = LinearNormalActionNoise(mean=np.zeros(n_actions),
+#                                                                      sigma=noise_std * np.ones(n_actions),
+#                                                                      final_sigma=hyperparams.get('noise_std_final', 0.0) * np.ones(n_actions),
+#                                                                      max_steps=n_timesteps)
+#            else:
+#                hyperparams['action_noise'] = NormalActionNoise(mean=np.zeros(n_actions),
+#                                                                sigma=noise_std * np.ones(n_actions))
+#        elif 'ornstein-uhlenbeck' in noise_type:
+#            hyperparams['action_noise'] = OrnsteinUhlenbeckActionNoise(mean=np.zeros(n_actions),
+#                                                                       sigma=noise_std * np.ones(n_actions))
+#        else:
+#            raise RuntimeError('Unknown noise type "{}"'.format(noise_type))
+#        print("Applying {} noise with std {}".format(noise_type, noise_std))
+#        del hyperparams['noise_type']
+#        del hyperparams['noise_std']
+#        if 'noise_std_final' in hyperparams:
+#            del hyperparams['noise_std_final']
+#
+#    if ALGOS[args.algo] is None:
+#        raise ValueError('{} requires MPI to be installed'.format(args.algo))
 
     if os.path.isfile(args.trained_agent):
         # Continue training
@@ -377,11 +382,13 @@ if __name__ == '__main__':
             """
             Helper to create a model with different hyperparameters
             """
-            return ALGOS[args.algo](env=create_env(n_envs, no_log=True), tensorboard_log=tensorboard_log,
+            from utils.utils import ALGOS
+            return ALGOS[args.algo](env=create_env(1, no_log=True), tensorboard_log=tensorboard_log,
                                     verbose=0, **kwargs)
 
+        myhyperparams=dict(policy='MlpPolicy')
         data_frame = hyperparam_optimization(args.algo, create_model, create_env, n_trials=args.n_trials,
-                                             n_timesteps=n_timesteps, hyperparams=hyperparams,
+                                             n_timesteps=n_timesteps, hyperparams=myhyperparams,
                                              n_jobs=args.n_jobs, seed=args.seed,
                                              sampler_method=args.sampler, pruner_method=args.pruner,
                                              verbose=args.verbose, study_name=args.study_name)
@@ -398,12 +405,12 @@ if __name__ == '__main__':
         data_frame.to_csv(log_path)
 
         #shitty clean up
-        import os
-        import signal
-        import psutil
-        for children in [p.pid for p in psutil.Process(os.getpid()).children(recursive=True)]:
-            os.kill(children, signal.SIGKILL)
-            print("kill %s" % children)
+#        import os
+#        import signal
+#        import psutil
+#        for children in [p.pid for p in psutil.Process(os.getpid()).children(recursive=True)]:
+#            os.kill(children, signal.SIGKILL)
+#            print("kill %s" % children)
 
         exit()
     else:
