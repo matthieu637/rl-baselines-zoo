@@ -60,10 +60,8 @@ def sublearn(kwargs, model_fn, eval_freq, n_eval_episodes, env_fn, remote, paren
                     break
             except AssertionError:
                 # Sometimes, random hyperparams can generate NaN
-                # Free memory
-                model.env.close()
                 remote.send(('pruned', float('+inf')))
-                raise optuna.exceptions.TrialPruned()
+                break
 
         remote.close()
     except EOFError:
@@ -163,16 +161,23 @@ def hyperparam_optimization(algo, model_fn, env_fn, n_trials=10, n_timesteps=500
             p.start()
             work_remotes[index].close()
 
+        is_pruned = False
         for eval_idx in range(n_evaluations):
-            results = [remote.recv() for remote in remotes]
+            results = []
+            for remote in remotes:
+                try:
+                    results.append(remote.recv())
+                except (BrokenPipeError, EOFError):
+                    results.append(float('+inf'))
 
             if 'pruned' in [r[0] for r in results]:
                 is_pruned = True
 
             print([r[1] for r in results])
             cost = np.mean([r[1] for r in results])
-            trial.report(cost, eval_idx+1)
-            is_pruned = trial.should_prune()
+
+            trial.report(cost, eval_idx + 1)
+            is_pruned = trial.should_prune() or is_pruned
             if is_pruned:
                 for remote in remotes:
                     try:
